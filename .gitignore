@@ -1,0 +1,23 @@
+# Node modules
+node_modules/
+npm-debug.log
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub-cache/
+.pub/
+
+# Android
+android/local.properties
+.gradle/
+.idea/
+
+# Mac
+.DS_Store
+
+# Enviroment variables
+.env

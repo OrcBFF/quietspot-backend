@@ -91,7 +91,7 @@ async function sendVerificationEmail(toEmail, userName, verifyCode) {
     return data;
 }
 
-// Signup endpoint - creates pending user and sends verification email
+// Signup endpoint - creates user and auto-verifies (no email verification needed)
 router.post('/signup', async (req, res) => {
     try {
         const { username, email, password } = req.body;
@@ -118,32 +118,26 @@ router.post('/signup', async (req, res) => {
             return res.status(409).json({ error: 'Username already taken' });
         }
 
-        // Generate 5-digit verification code
-        const verifyToken = Math.floor(10000 + Math.random() * 90000).toString();
-        const verifyExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+        // Create user as already verified (skip email verification)
+        const [result] = await db.execute(`
+            INSERT INTO users (name, email, password, email_verified)
+            VALUES (?, ?, ?, TRUE)
+        `, [username, email, password]);
 
-        // Create user with pending verification
-        await db.execute(`
-            INSERT INTO users (name, email, password, email_verified, email_verify_token, email_verify_expires)
-            VALUES (?, ?, ?, FALSE, ?, ?)
-        `, [username, email, password, verifyToken, verifyExpires]);
+        // Get the created user
+        const [rows] = await db.execute(`
+            SELECT user_id as id, name, email FROM users WHERE user_id = ?
+        `, [result.insertId]);
 
-        // Send verification email
-        try {
-            await sendVerificationEmail(email, username, verifyToken);
-            console.log(`✅ Verification email sent to ${email}`);
-        } catch (emailError) {
-            console.error('❌ Failed to send verification email:', emailError.message);
-            // Log to console as fallback
-            console.log('\n' + '='.repeat(50));
-            console.log('📧 EMAIL VERIFICATION (email failed, showing here)');
-            console.log('='.repeat(50));
-            console.log(`To: ${email}`);
-            console.log(`Verification Code: ${verifyToken}`);
-            console.log('='.repeat(50) + '\n');
-        }
+        const user = rows[0];
+        console.log(`✅ User created and auto-verified: ${username} (${email})`);
 
-        res.status(201).json({ message: 'Verification code sent to your email' });
+        // Return user info for immediate login
+        res.status(201).json({
+            id: user.id,
+            name: user.name,
+            email: user.email
+        });
 
     } catch (error) {
         console.error('Signup error:', error);
