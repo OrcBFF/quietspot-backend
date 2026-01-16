@@ -17,6 +17,8 @@ router.get('/', async (req, res) => {
         postal_code,
         avg_db as noiseDb,
         measurements_count,
+        capacity,
+        is_available,
         created_by_user_id,
         created_at
       FROM locations
@@ -31,8 +33,8 @@ router.get('/', async (req, res) => {
       description: row.description || '',
       noiseLevel: row.noiseDb ? Math.min(5, Math.max(1, Math.round((row.noiseDb - 20) / 15))) : 3,
       noiseDb: row.noiseDb ? parseFloat(row.noiseDb) : null,
-      capacity: 1, // Default capacity
-      isAvailable: true, // Default to available
+      capacity: row.capacity || 3,
+      isAvailable: row.is_available !== 0,
       latitude: parseFloat(row.latitude),
       longitude: parseFloat(row.longitude),
     }));
@@ -59,6 +61,8 @@ router.get('/:id', async (req, res) => {
         postal_code,
         avg_db as noiseDb,
         measurements_count,
+        capacity,
+        is_available,
         created_by_user_id,
         created_at
       FROM locations
@@ -77,8 +81,8 @@ router.get('/:id', async (req, res) => {
       description: row.description || '',
       noiseLevel: row.noiseDb ? Math.min(5, Math.max(1, Math.round((row.noiseDb - 20) / 15))) : 3,
       noiseDb: row.noiseDb ? parseFloat(row.noiseDb) : null,
-      capacity: 1,
-      isAvailable: true,
+      capacity: row.capacity || 3,
+      isAvailable: row.is_available !== 0,
       latitude: parseFloat(row.latitude),
       longitude: parseFloat(row.longitude),
     };
@@ -134,10 +138,28 @@ router.post('/', async (req, res) => {
     if (!newId) {
       // Create NEW location if no match found
       const [result] = await db.execute(`
-        INSERT INTO locations (name, description, latitude, longitude, address, created_by_user_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [name, description || '', latitude, longitude, location || '', userId]);
+        INSERT INTO locations (name, description, latitude, longitude, address, created_by_user_id, capacity, is_available)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [name, description || '', latitude, longitude, location || '', userId, capacity || 3, isAvailable !== false]);
       newId = result.insertId;
+    } else {
+      // Update existing location with new capacity/availability
+      if (capacity !== undefined || isAvailable !== undefined) {
+        const updateFields = [];
+        const updateValues = [];
+        if (capacity !== undefined) {
+          updateFields.push('capacity = ?');
+          updateValues.push(capacity);
+        }
+        if (isAvailable !== undefined) {
+          updateFields.push('is_available = ?');
+          updateValues.push(isAvailable);
+        }
+        if (updateFields.length > 0) {
+          updateValues.push(newId);
+          await db.execute(`UPDATE locations SET ${updateFields.join(', ')} WHERE location_id = ?`, updateValues);
+        }
+      }
     }
 
     // If noise measurement provided, add it
@@ -158,6 +180,8 @@ router.post('/', async (req, res) => {
         longitude,
         address as location,
         avg_db as noiseDb,
+        capacity,
+        is_available,
         created_by_user_id
       FROM locations
       WHERE location_id = ?
@@ -171,8 +195,8 @@ router.post('/', async (req, res) => {
       description: row.description || '',
       noiseLevel: row.noiseDb ? Math.min(5, Math.max(1, Math.round((row.noiseDb - 20) / 15))) : (noiseLevel || 3),
       noiseDb: row.noiseDb ? parseFloat(row.noiseDb) : (noiseDb || null),
-      capacity: capacity || 1,
-      isAvailable: isAvailable !== undefined ? isAvailable : true,
+      capacity: row.capacity || 3,
+      isAvailable: row.is_available !== 0,
       latitude: parseFloat(row.latitude),
       longitude: parseFloat(row.longitude),
     };
@@ -213,6 +237,14 @@ router.put('/:id', async (req, res) => {
       updates.push('address = ?');
       values.push(location);
     }
+    if (capacity !== undefined) {
+      updates.push('capacity = ?');
+      values.push(capacity);
+    }
+    if (isAvailable !== undefined) {
+      updates.push('is_available = ?');
+      values.push(isAvailable);
+    }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
@@ -244,7 +276,9 @@ router.put('/:id', async (req, res) => {
         latitude,
         longitude,
         address as location,
-        avg_db as noiseDb
+        avg_db as noiseDb,
+        capacity,
+        is_available
       FROM locations
       WHERE location_id = ?
     `, [req.params.id]);
@@ -261,8 +295,8 @@ router.put('/:id', async (req, res) => {
       description: row.description || '',
       noiseLevel: row.noiseDb ? Math.min(5, Math.max(1, Math.round((row.noiseDb - 20) / 15))) : (noiseLevel || 3),
       noiseDb: row.noiseDb ? parseFloat(row.noiseDb) : (noiseDb || null),
-      capacity: capacity || 1,
-      isAvailable: isAvailable !== undefined ? isAvailable : true,
+      capacity: row.capacity || 3,
+      isAvailable: row.is_available !== 0,
       latitude: parseFloat(row.latitude),
       longitude: parseFloat(row.longitude),
     };
