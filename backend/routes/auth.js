@@ -1,32 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// Configure email transporter with explicit Gmail SMTP settings
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // use SSL
-    auth: {
-        user: 'quietspot.app@gmail.com',
-        pass: 'itxszkdralxgnwsn'
-    }
-});
+// Initialize Resend with API key from environment variable
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Verify email configuration on startup
-transporter.verify((error, success) => {
-    if (error) {
-        console.log('⚠️  Email configuration error:', error.message);
-    } else {
-        console.log('✅ Email server is ready to send messages');
-    }
-});
+// Log email configuration status on startup
+if (process.env.RESEND_API_KEY) {
+    console.log('✅ Resend email service configured');
+} else {
+    console.log('⚠️  RESEND_API_KEY not set - emails will be logged to console');
+}
 
 // Helper function to send password reset email
 async function sendPasswordResetEmail(toEmail, userName, resetCode) {
-    const mailOptions = {
-        from: '"QuietSpot" <quietspot.app@gmail.com>',
+    const { data, error } = await resend.emails.send({
+        from: 'QuietSpot <onboarding@resend.dev>',
         to: toEmail,
         subject: 'Password Reset Code - QuietSpot',
         html: `
@@ -54,15 +44,18 @@ async function sendPasswordResetEmail(toEmail, userName, resetCode) {
                 </div>
             </div>
         `
-    };
+    });
 
-    return transporter.sendMail(mailOptions);
+    if (error) {
+        throw new Error(error.message);
+    }
+    return data;
 }
 
 // Helper function to send email verification code
 async function sendVerificationEmail(toEmail, userName, verifyCode) {
-    const mailOptions = {
-        from: '"QuietSpot" <quietspot.app@gmail.com>',
+    const { data, error } = await resend.emails.send({
+        from: 'QuietSpot <onboarding@resend.dev>',
         to: toEmail,
         subject: 'Verify Your Email - QuietSpot',
         html: `
@@ -90,9 +83,12 @@ async function sendVerificationEmail(toEmail, userName, verifyCode) {
                 </div>
             </div>
         `
-    };
+    });
 
-    return transporter.sendMail(mailOptions);
+    if (error) {
+        throw new Error(error.message);
+    }
+    return data;
 }
 
 // Signup endpoint - creates pending user and sends verification email
