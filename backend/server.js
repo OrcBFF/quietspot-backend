@@ -21,9 +21,9 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'QuietSpot API is running' });
 });
 
-// Start server
-app.listen(PORT, () => {
+// Start server - listen on 0.0.0.0 to allow connections from network
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 QuietSpot API server running on http://localhost:${PORT}`);
   console.log(`📡 API endpoints available at http://localhost:${PORT}/api`);
+  console.log(`🌐 Network access: http://192.168.13.227:${PORT}/api`);
 });
-

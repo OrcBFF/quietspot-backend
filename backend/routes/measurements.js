@@ -16,7 +16,7 @@ router.get('/location/:locationId', async (req, res) => {
       WHERE location_id = ?
       ORDER BY measured_at DESC
     `, [req.params.locationId]);
-    
+
     res.json(rows);
   } catch (error) {
     console.error('Error fetching measurements:', error);
@@ -28,18 +28,28 @@ router.get('/location/:locationId', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { locationId, userId, noiseDb } = req.body;
-    
+
     if (!locationId || noiseDb === undefined) {
       return res.status(400).json({ error: 'locationId and noiseDb are required' });
     }
-    
-    const finalUserId = userId || 1;
-    
+
+    // Use default user_id = NULL if not valid integer (Guest)
+    let finalUserId = userId;
+    if (!Number.isInteger(finalUserId)) {
+      finalUserId = null;
+    } else if (finalUserId) {
+      // Verify user exists
+      const [userCheck] = await db.execute('SELECT user_id FROM users WHERE user_id = ?', [finalUserId]);
+      if (userCheck.length === 0) {
+        finalUserId = null;
+      }
+    }
+
     const [result] = await db.execute(`
       INSERT INTO noise_measurements (location_id, user_id, db_value)
       VALUES (?, ?, ?)
     `, [locationId, finalUserId, noiseDb]);
-    
+
     // Fetch the created measurement
     const [rows] = await db.execute(`
       SELECT 
@@ -51,7 +61,7 @@ router.post('/', async (req, res) => {
       FROM noise_measurements
       WHERE measurement_id = ?
     `, [result.insertId]);
-    
+
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Error creating measurement:', error);
@@ -63,11 +73,11 @@ router.post('/', async (req, res) => {
 router.get('/nearby', async (req, res) => {
   try {
     const { latitude, longitude, radiusMeters = 100 } = req.query;
-    
+
     if (!latitude || !longitude) {
       return res.status(400).json({ error: 'latitude and longitude are required' });
     }
-    
+
     // Get nearby locations and their average measurements
     const [rows] = await db.execute(`
       SELECT 
@@ -88,7 +98,7 @@ router.get('/nearby', async (req, res) => {
       GROUP BY l.location_id, l.latitude, l.longitude
       HAVING measurementCount > 0
     `, [latitude, longitude, latitude, radiusMeters]);
-    
+
     res.json(rows);
   } catch (error) {
     console.error('Error fetching nearby measurements:', error);
